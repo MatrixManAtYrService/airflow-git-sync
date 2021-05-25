@@ -11,7 +11,7 @@ from random import randint, choices, seed
 from string import ascii_letters
 
 # how much work to generate
-scale = 3
+scale = 22
 
 # how much parallelism
 ratio = 4
@@ -77,7 +77,7 @@ class Directive:
         seed(n)
         self.steps = []
 
-        which_type = randint(1, 4)
+        which_type = randint(1, 2)
 
         if which_type == 1:
             step_numbers = range(randint(1, variation_count))
@@ -135,14 +135,13 @@ def scheduler_stress():
 
         for worker_num in range(1, max(floor(scale / ratio), 2)):
             worker_seed = randint(1, variation_types)
-            worker = busy_worker(f"lane{lane_num}_worker{worker_num}")
-            lane.append(worker(worker_seed))
+            worker_task = busy_worker(f"lane{lane_num}_worker{worker_num}")
+            work = worker_task(worker_seed)
+            if worker_num == 1:
+                start >> work
+            lane.append(work)
 
-        started = False
         for this_task, next_task in zip(lane, lane[1:]):
-            if not started:
-                started = True
-                start >> this_task
             this_task >> next_task
 
 
