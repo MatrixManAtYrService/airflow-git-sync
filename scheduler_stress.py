@@ -1,7 +1,9 @@
 from airflow.decorators import task, dag
 from airflow.utils.dates import days_ago
 from time import sleep, time
+from datetime import datetime, timedelta
 import gzip
+from math import ceil
 
 from tempfile import TemporaryDirectory
 import os
@@ -9,7 +11,7 @@ from random import randint, choices, seed
 from string import ascii_letters
 
 # how much work to generate
-scale = 18
+scale = 22
 
 # how much parallelism
 ratio = 4
@@ -18,10 +20,13 @@ ratio = 4
 max_hardness = 30
 
 # how many different workloads to randomly assign?
-variation = 10
+variation_types = 15
+variation_count = 3
+
 
 # determines the outcome of pseudorandom choices like whether to sleep or work, and for how long
-shape_seed = 2
+# hard code a value here for (more or less) deterministic timing
+shape_seed = randint(1, 1000)
 
 
 class Directive:
@@ -54,6 +59,16 @@ class Directive:
                 f.read()
         print("    done")
 
+    def sleep_until_10_step(_):
+        """
+        sleep until the next 10 minute mark
+        """
+        duration = (-datetime.now().second) % 10
+        target = datetime.now() + timedelta(seconds=duration)
+        print(f"sleeping until {target.strftime(r'%H:%M:%S')}")
+        sleep(duration)
+        print("done")
+
     def __init__(self, n):
         """
         Deterministically come up with some steps to take
@@ -62,43 +77,42 @@ class Directive:
         seed(n)
         self.steps = []
 
-        # up to ten steps
-        step_numbers = range(randint(1, 10))
-        for _ in step_numbers:
+        which_type = randint(0, 10)
 
-            # vary work intensity
-            how_hard = randint(0, 20)
-
-            which_type = randint(0, 1)
-
-            # half sleeps, half works
-            if which_type == 0:
-                self.steps.append((Directive.sleep_step, how_hard))
-            else:
-                self.steps.append((Directive.work_step, how_hard))
+        if which_type == 0:
+            step_numbers = range(randint(1, variation_count))
+            for _ in step_numbers:
+                how_hard = randint(0, max_hardness)
+                if randint(0, 1) == 0:
+                    self.steps.append((Directive.sleep_step, how_hard))
+                else:
+                    self.steps.append((Directive.work_step, how_hard))
+        else:
+            self.steps = [(Directive.sleep_until_10_step, None)]
 
     def walk_steps(self):
         for do_this, like_this in self.steps:
-            before = time()
             do_this(like_this)
-            duration = time() - before
-            print("duration", duration)
 
 
 @task
 def report_params(seed):
     print("scale", scale)
     print("ratio", ratio)
-    print("max_hardness", 20)
-    print("variation", 15)
+    print("max_hardness", max_hardness)
+    print("variation_types", variation_types)
+    print("variation_count", variation_count)
     print("seed", seed)
 
 
 def busy_worker(name):
     @task(task_id=name)
     def busy_work(n):
+        before = time()
         work = Directive(n)
         work.walk_steps()
+        duration = time() - before
+        print("duration:", duration)
 
     return busy_work
 
@@ -111,19 +125,16 @@ def busy_worker(name):
 )
 def scheduler_stress():
 
-    # comment this line out for deterministic load shaping
-    shape_seed = randint(1, 1000)
-
     # report the seed for this execution
     start = report_params(shape_seed)
     seed(shape_seed)
 
-    for lane_num in range(1, (scale * ratio) + 1):
+    for lane_num in range(1, ceil(scale * ratio) + 1):
 
         lane = []
 
-        for worker_num in range(1, int(scale / ratio) + 1):
-            worker_seed = randint(1, variation)
+        for worker_num in range(1, ceil(scale / ratio) + 1):
+            worker_seed = randint(1, variation_types)
             worker = busy_worker(f"lane{lane_num}_worker{worker_num}")
             lane.append(worker(worker_seed))
 
