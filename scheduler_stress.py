@@ -9,13 +9,13 @@ from random import randint, choices, seed
 from string import ascii_letters
 
 # how much work to generate
-scale = 20
+scale = 18
 
 # how much parallelism
-ratio = 3
+ratio = 4
 
 # how long can each step be?  (100 ~ 10 sec)
-max_hardness = 50
+max_hardness = 30
 
 # how many different workloads to randomly assign?
 variation = 10
@@ -85,6 +85,15 @@ class Directive:
             print("duration", duration)
 
 
+@task
+def report_params(seed):
+    print("scale", scale)
+    print("ratio", ratio)
+    print("max_hardness", 20)
+    print("variation", 15)
+    print("seed", seed)
+
+
 def busy_worker(name):
     @task(task_id=name)
     def busy_work(n):
@@ -95,14 +104,18 @@ def busy_worker(name):
 
 
 @dag(
-    schedule_interval="*/5 * * * *",
+    schedule_interval="*/15 * * * *",
     start_date=days_ago(1),
     default_args={"owner": "airflow"},
     catchup=False,
 )
 def scheduler_stress():
 
-    # pseudorandom seed for the work's "shape"
+    # comment this line out for deterministic load shaping
+    shape_seed = randint(1, 1000)
+
+    # report the seed for this execution
+    start = report_params(shape_seed)
     seed(shape_seed)
 
     for lane_num in range(1, (scale * ratio) + 1):
@@ -114,7 +127,11 @@ def scheduler_stress():
             worker = busy_worker(f"lane{lane_num}_worker{worker_num}_seed{worker_seed}")
             lane.append(worker(worker_seed))
 
+        started = False
         for this_task, next_task in zip(lane, lane[1:]):
+            if not started:
+                started = True
+                start >> this_task
             this_task >> next_task
 
 
