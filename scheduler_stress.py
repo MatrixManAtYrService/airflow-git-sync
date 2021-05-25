@@ -77,7 +77,7 @@ class Directive:
         seed(n)
         self.steps = []
 
-        which_type = randint(0, 10)
+        which_type = randint(0, 4)
 
         if which_type == 0:
             step_numbers = range(randint(1, variation_count))
