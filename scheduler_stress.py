@@ -124,7 +124,7 @@ def scheduler_stress():
 
         for worker_num in range(1, int(scale / ratio) + 1):
             worker_seed = randint(1, variation)
-            worker = busy_worker(f"lane{lane_num}_worker{worker_num}_seed{worker_seed}")
+            worker = busy_worker(f"lane{lane_num}_worker{worker_num}")
             lane.append(worker(worker_seed))
 
         started = False
