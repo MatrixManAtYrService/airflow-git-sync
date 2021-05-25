@@ -1,0 +1,75 @@
+# ensure cluster exist and is configured for local use
+
+kubectl config use-context microk8s
+
+# ensure helm installed
+
+helm repo add airflow-stable https://airflow-helm.github.io/charts
+helm repo update
+
+# ensure cluster has storage and dns enabled
+
+export RELEASE_NAME=scheduler-test
+export NAMESPACE=mycluster
+export CHART_VERSION=8.1.2
+export VALUES_FILE=./values.yaml
+
+
+# enter a venv and "pip install cryptography"
+
+echo 'airflow:
+  executor: KubernetesExecutor
+  fernetKey: "'$(python -c 'from cryptography.fernet import Fernet ; print(Fernet.generate_key().decode())')'"
+
+  config:
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    GUNICORN_CMD_ARGS: "--log-level WARNING"
+    AIRFLOW__API__AUTH_BACKEND: "airflow.api.auth.backend.basic_auth"
+
+  users:
+    - username: admin
+      password: admin
+      role: Admin
+      email: admin@example.com
+      firstName: admin
+      lastName: admin
+
+scheduler:
+  replicas: 1
+
+web:
+  service:
+    type: NodePort
+
+workers:
+  enabled: false
+
+flower:
+  enabled: false
+
+logs:
+  persistence:
+    enabled: true
+
+dags:
+  gitSync:
+    enabled: true
+    repo: "https://github.com/MatrixManAtYrService/airflow-git-sync"
+    branch: "master"
+    revision: "HEAD"
+    syncWait: 60
+
+postgresql:
+  enabled: true
+
+redis:
+  enabled: false
+' >> values.yaml
+
+helm install $RELEASE_NAME \
+  airflow-stable/airflow \
+  --namespace $NAMESPACE \
+  --version $CHART_VERSION \
+  --values $VALUES_FILE
+
