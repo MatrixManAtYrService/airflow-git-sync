@@ -3,7 +3,7 @@ from airflow.utils.dates import days_ago
 from time import sleep, time
 from datetime import datetime, timedelta
 import gzip
-from math import ceil
+from math import ceil, floor
 
 from tempfile import TemporaryDirectory
 import os
@@ -129,11 +129,11 @@ def scheduler_stress():
     start = report_params(shape_seed)
     seed(shape_seed)
 
-    for lane_num in range(1, ceil(scale * ratio) + 1):
+    for lane_num in range(1, max(ceil(scale * ratio), 1)):
 
         lane = []
 
-        for worker_num in range(1, ceil(scale / ratio) + 1):
+        for worker_num in range(1, min(floor(scale / ratio), 1)):
             worker_seed = randint(1, variation_types)
             worker = busy_worker(f"lane{lane_num}_worker{worker_num}")
             lane.append(worker(worker_seed))
